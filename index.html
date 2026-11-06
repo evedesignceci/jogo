@@ -37,6 +37,7 @@
             background-color: #7ec850;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
         #controles {
             margin-top: 10px;
@@ -66,7 +67,8 @@
         <div class="hud-item">🛒 Na Prateleira: <span id="ui-estoque">0</span></div>
     </div>
 
-    <canvas id="gameCanvas" width="850" height="500"></canvas>
+    <!-- Aumentei o canvas para caber a fazenda e a cidade lado a lado bonitinhas -->
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
 
     <div id="controles">
         Andar: <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> ou <kbd>Setas</kbd> | 
@@ -77,7 +79,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Carregando o tileset completo do Cloudinary
+// Carregando o seu tileset oficial do Cloudinary
 const tilesetImg = new Image();
 tilesetImg.src = "https://res.cloudinary.com/oactqmgs/image/upload/v1793927465/tilemap_packed.png";
 
@@ -87,23 +89,22 @@ const jogo = {
     sementes: 3,
     morangosMochila: 0,
     estoquePrateleira: 0,
-    mensagem: "Colha os morangos na fazenda e leve para vender no seu Mercadinho!",
+    mensagem: "Colha morangos na fazenda à esquerda e venda no mercado da cidade!",
     tempoMensagem: 180
 };
 
 // --- JOGADOR ---
 const player = {
-    x: 200,
-    y: 250,
-    w: 32,
-    h: 32,
+    x: 180,
+    y: 270,
+    w: 36,
+    h: 36,
     vel: 3.5
 };
 
-// --- ÁRVORES DO CENÁRIO (Coordenadas extraídas do Tiny City) ---
-const arvores = [
-    { x: 20, y: 20 }, { x: 90, y: 15 }, { x: 20, y: 420 },
-    { x: 380, y: 20 }, { x: 380, y: 430 }
+// --- ÁRVORES DA FAZENDA ---
+const arvoresFazenda = [
+    { x: 30, y: 30 }, { x: 100, y: 30 }, { x: 30, y: 450 }, { x: 100, y: 460 }
 ];
 
 // --- FAZENDA: CANTEIROS ---
@@ -111,10 +112,10 @@ const canteiros = [];
 for (let linha = 0; linha < 3; linha++) {
     for (let col = 0; col < 3; col++) {
         canteiros.push({
-            x: 130 + col * 60,
-            y: 170 + linha * 60,
-            w: 48,
-            h: 48,
+            x: 150 + col * 65,
+            y: 190 + linha * 65,
+            w: 52,
+            h: 52,
             estado: 0,
             progresso: 0
         });
@@ -122,24 +123,23 @@ for (let linha = 0; linha < 3; linha++) {
 }
 
 // --- ESTAÇÕES DE INTERAÇÃO ---
-const lojaSementes = { x: 150, y: 60, w: 110, h: 45, preco: 10 };
-const gondolaMercado = { x: 580, y: 140, w: 120, h: 55 };
-const caixaRegistradora = { x: 550, y: 340, w: 80, h: 50 };
+const lojaSementes = { x: 170, y: 70, w: 120, h: 50, preco: 10 };
+const gondolaMercado = { x: 670, y: 160, w: 130, h: 60 };
+const caixaRegistradora = { x: 630, y: 360, w: 90, h: 55 };
 
-// --- CLIENTES (IA DO MERCADINHO) ---
+// --- CLIENTES DA CIDADE ---
 const clientes = [];
-let timerNovoCliente = 100;
+let timerNovoCliente = 120;
 
 function criarCliente() {
     if (clientes.length >= 4) return;
     clientes.push({
-        x: 800,
-        y: 450,
-        w: 28,
-        h: 28,
+        x: 900,
+        y: 470,
+        w: 32,
+        h: 32,
         vel: 1.8,
-        estado: 'INDO_PRATELEIRA',
-        temProduto: false
+        estado: 'INDO_PRATELEIRA'
     });
 }
 
@@ -177,7 +177,7 @@ function distancia(a, b) {
 
 function interagir() {
     for (let c of canteiros) {
-        if (distancia(player, c) < 55) {
+        if (distancia(player, c) < 60) {
             if (c.estado === 0) {
                 if (jogo.sementes > 0) {
                     jogo.sementes--;
@@ -203,7 +203,7 @@ function interagir() {
         }
     }
 
-    if (distancia(player, lojaSementes) < 75) {
+    if (distancia(player, lojaSementes) < 80) {
         if (jogo.ouro >= lojaSementes.preco) {
             jogo.ouro -= lojaSementes.preco;
             jogo.sementes += 3;
@@ -215,7 +215,7 @@ function interagir() {
         return;
     }
 
-    if (distancia(player, gondolaMercado) < 85) {
+    if (distancia(player, gondolaMercado) < 90) {
         if (jogo.morangosMochila > 0) {
             jogo.estoquePrateleira += jogo.morangosMochila;
             mostrarAviso(`🛒 Abasteceu a prateleira com ${jogo.morangosMochila} morangos!`);
@@ -227,7 +227,7 @@ function interagir() {
         return;
     }
 
-    if (distancia(player, caixaRegistradora) < 85) {
+    if (distancia(player, caixaRegistradora) < 90) {
         const clienteFila = clientes.find(cli => cli.estado === 'NA_FILA');
         if (clienteFila) {
             clienteFila.estado = 'SAINDO';
@@ -251,9 +251,9 @@ function atualizar() {
     let novoX = player.x + dx;
     let novoY = player.y + dy;
 
-    // Porta de entrada entre a fazenda e a cidade
-    const naPorta = (novoY > 200 && novoY + player.h < 300);
-    if (!naPorta && novoX + player.w > 435 && novoX < 455) {
+    // Passagem da fazenda para a cidade
+    const naPorta = (novoY > 210 && novoY + player.h < 330);
+    if (!naPorta && novoX + player.w > 480 && novoX < 500) {
         novoX = player.x;
     }
 
@@ -280,21 +280,20 @@ function atualizar() {
 
         if (cli.estado === 'INDO_PRATELEIRA') {
             moverPara(cli, gondolaMercado.x + 40, gondolaMercado.y + 70);
-            if (Math.hypot(cli.x - (gondolaMercado.x + 40), cli.y - (gondolaMercado.y + 70)) < 10) {
+            if (Math.hypot(cli.x - (gondolaMercado.x + 40), cli.y - (gondolaMercado.y + 70)) < 12) {
                 cli.estado = 'ESPERANDO_ESTOQUE';
             }
         } 
         else if (cli.estado === 'ESPERANDO_ESTOQUE') {
             if (jogo.estoquePrateleira > 0) {
                 jogo.estoquePrateleira--;
-                cli.temProduto = true;
                 cli.estado = 'INDO_CAIXA';
                 atualizarHUD();
             }
         } 
         else if (cli.estado === 'INDO_CAIXA' || cli.estado === 'NA_FILA') {
-            const posFilaX = caixaRegistradora.x + 85 + (indiceFila * 32);
-            const posFilaY = caixaRegistradora.y + 10;
+            const posFilaX = caixaRegistradora.x + 90 + (indiceFila * 36);
+            const posFilaY = caixaRegistradora.y + 12;
             indiceFila++;
             moverPara(cli, posFilaX, posFilaY);
             if (Math.hypot(cli.x - posFilaX, cli.y - posFilaY) < 8) {
@@ -302,8 +301,8 @@ function atualizar() {
             }
         } 
         else if (cli.estado === 'SAINDO') {
-            moverPara(cli, 820, 450);
-            if (cli.x > 810) {
+            moverPara(cli, 920, 470);
+            if (cli.x > 910) {
                 clientes.splice(i, 1);
             }
         }
@@ -324,139 +323,141 @@ function desenhar() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-        // --- LADO ESQUERDO: FAZENDA ---
-        ctx.fillStyle = '#7ec850';
-        ctx.fillRect(0, 0, 445, canvas.height);
+        // --- LADO ESQUERDO: FAZENDA (Grama verde do tileset) ---
+        ctx.drawImage(tilesetImg, 144, 0, 48, 48, 0, 0, 500, canvas.height);
 
-        // --- LADO DIREITO: CIDADE / MERCADO (Desenhando o asfalto e calçadas do Tiny City) ---
-        // Asfalto da rua principal da cidade
-        ctx.drawImage(tilesetImg, 64, 64, 48, 48, 445, 200, 405, 100);
-        // Calçadas da cidade
-        ctx.drawImage(tilesetImg, 0, 0, 48, 48, 445, 0, 405, 200);
-        ctx.drawImage(tilesetImg, 0, 0, 48, 48, 445, 300, 405, 200);
+        // --- LADO DIREITO: CIDADE / MERCADO (Ruas e prédios do Tiny City) ---
+        // Asfalto da rua da cidade
+        ctx.drawImage(tilesetImg, 48, 64, 96, 48, 500, 200, 460, 140);
+        // Prédios / calçadas superiores e inferiores
+        ctx.drawImage(tilesetImg, 0, 0, 96, 64, 500, 0, 460, 200);
+        ctx.drawImage(tilesetImg, 0, 64, 48, 64, 500, 340, 460, 200);
     } else {
         ctx.fillStyle = '#7ec850';
-        ctx.fillRect(0, 0, 445, canvas.height);
-        ctx.fillStyle = '#d9a066';
-        ctx.fillRect(445, 0, canvas.width - 445, canvas.height);
+        ctx.fillRect(0, 0, 500, canvas.height);
+        ctx.fillStyle = '#4a6fa5';
+        ctx.fillRect(500, 0, canvas.width - 500, canvas.height);
     }
 
-    // Caminho de terra entre a fazenda e a cidade
-    ctx.fillStyle = '#e2b87e';
-    ctx.fillRect(380, 215, 100, 70);
+    // Caminho de terra conectando a fazenda à cidade
+    ctx.fillStyle = '#d4a373';
+    ctx.fillRect(450, 220, 80, 100);
 
-    // Loja de Sementes na Fazenda
-    ctx.fillStyle = '#8f563b';
+    // Loja de Sementes
+    ctx.fillStyle = '#5c4033';
     ctx.fillRect(lojaSementes.x, lojaSementes.y, lojaSementes.w, lojaSementes.h);
-    ctx.fillStyle = '#ff6b6b';
-    ctx.fillRect(lojaSementes.x - 5, lojaSementes.y - 12, lojaSementes.w + 10, 14);
+    ctx.fillStyle = '#e76f51';
+    ctx.fillRect(lojaSementes.x - 6, lojaSementes.y - 14, lojaSementes.w + 12, 16);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText("🌱 SEMENTES (10g)", lojaSementes.x + 2, lojaSementes.y + 26);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText("🌱 SEMENTES (10g)", lojaSementes.x + 4, lojaSementes.y + 30);
 
     // Canteiros de Plantação
     for (let c of canteiros) {
-        ctx.fillStyle = '#6b4423';
+        ctx.fillStyle = '#582f0e';
         ctx.fillRect(c.x, c.y, c.w, c.h);
-        ctx.strokeStyle = '#4e3018';
+        ctx.strokeStyle = '#3b1f07';
+        ctx.lineWidth = 2;
         ctx.strokeRect(c.x, c.y, c.w, c.h);
 
         if (c.estado === 1) {
-            ctx.fillStyle = '#a8e6cf';
-            ctx.fillRect(c.x + 20, c.y + 20, 8, 8);
+            ctx.fillStyle = '#99d98c';
+            ctx.fillRect(c.x + 20, c.y + 20, 12, 12);
         } else if (c.estado === 2) {
-            ctx.fillStyle = '#2ecc71';
+            ctx.fillStyle = '#52b788';
             ctx.beginPath();
-            ctx.arc(c.x + 24, c.y + 24, 10, 0, Math.PI * 2);
+            ctx.arc(c.x + 26, c.y + 26, 12, 0, Math.PI * 2);
             ctx.fill();
         } else if (c.estado === 3) {
-            ctx.fillStyle = '#27ae60';
+            ctx.fillStyle = '#2d6a4f';
             ctx.beginPath();
-            ctx.arc(c.x + 24, c.y + 20, 13, 0, Math.PI * 2);
+            ctx.arc(c.x + 26, c.y + 22, 15, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#ff2e4c';
+            ctx.fillStyle = '#e63946'; // Morangos maduros
             ctx.beginPath();
-            ctx.arc(c.x + 19, c.y + 26, 6, 0, Math.PI * 2);
-            ctx.arc(c.x + 29, c.y + 25, 6, 0, Math.PI * 2);
+            ctx.arc(c.x + 20, c.y + 30, 7, 0, Math.PI * 2);
+            ctx.arc(c.x + 32, c.y + 28, 7, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
     // Prateleira/Gôndola do Mercado
-    ctx.fillStyle = '#8f563b';
+    ctx.fillStyle = '#6f4e37';
     ctx.fillRect(gondolaMercado.x, gondolaMercado.y, gondolaMercado.w, gondolaMercado.h);
-    ctx.fillStyle = '#b87d56';
-    ctx.fillRect(gondolaMercado.x + 6, gondolaMercado.y + 6, gondolaMercado.w - 12, gondolaMercado.h - 12);
+    ctx.fillStyle = '#a68a64';
+    ctx.fillRect(gondolaMercado.x + 8, gondolaMercado.y + 8, gondolaMercado.w - 16, gondolaMercado.h - 16);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 12, gondolaMercado.y - 6);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 10, gondolaMercado.y - 8);
 
     const qtdVisual = Math.min(jogo.estoquePrateleira, 10);
     for (let i = 0; i < qtdVisual; i++) {
-        ctx.fillStyle = '#ff2e4c';
+        ctx.fillStyle = '#e63946';
         ctx.beginPath();
-        ctx.arc(gondolaMercado.x + 16 + (i % 5) * 20, gondolaMercado.y + 20 + Math.floor(i / 5) * 18, 6, 0, Math.PI * 2);
+        ctx.arc(gondolaMercado.x + 20 + (i % 5) * 20, gondolaMercado.y + 24 + Math.floor(i / 5) * 20, 7, 0, Math.PI * 2);
         ctx.fill();
     }
 
     // Caixa Registradora
-    ctx.fillStyle = '#5c4033';
+    ctx.fillStyle = '#3a5a40';
     ctx.fillRect(caixaRegistradora.x, caixaRegistradora.y, caixaRegistradora.w, caixaRegistradora.h);
-    ctx.fillStyle = '#ffd700';
-    ctx.fillRect(caixaRegistradora.x + 35, caixaRegistradora.y + 10, 24, 24);
+    ctx.fillStyle = '#ffb703';
+    ctx.fillRect(caixaRegistradora.x + 35, caixaRegistradora.y + 12, 28, 28);
     ctx.fillStyle = '#fff';
-    ctx.fillText("CAIXA", caixaRegistradora.x + 16, caixaRegistradora.y - 6);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText("CAIXA", caixaRegistradora.x + 22, caixaRegistradora.y - 8);
 
-    // Clientes da Cidade
+    // Clientes
     for (let cli of clientes) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
             ctx.drawImage(tilesetImg, 0, 144, 16, 16, cli.x, cli.y, cli.w, cli.h);
         } else {
-            ctx.fillStyle = '#4ecdc4';
+            ctx.fillStyle = '#4ea8de';
             ctx.fillRect(cli.x, cli.y, cli.w, cli.h);
         }
 
         ctx.font = '14px monospace';
         ctx.fillStyle = '#fff6d3';
         if (cli.estado === 'ESPERANDO_ESTOQUE') {
-            ctx.fillText("💭🍓?", cli.x - 4, cli.y - 6);
+            ctx.fillText("💭🍓?", cli.x - 4, cli.y - 8);
         } else if (cli.estado === 'NA_FILA') {
-            ctx.fillText("🪙Pagar!", cli.x - 10, cli.y - 6);
+            ctx.fillText("🪙Pagar!", cli.x - 12, cli.y - 8);
         } else if (cli.estado === 'SAINDO') {
-            ctx.fillText("❤️", cli.x + 6, cli.y - 6);
+            ctx.fillText("❤️", cli.x + 8, cli.y - 8);
         }
     }
 
-    // Jogador
+    // Jogador (Personagem cortado diretamente do seu tileset)
     if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
         ctx.drawImage(tilesetImg, 16, 160, 16, 16, player.x, player.y, player.w, player.h);
     } else {
-        ctx.fillStyle = '#ff6b6b';
+        ctx.fillStyle = '#f72585';
         ctx.fillRect(player.x, player.y, player.w, player.h);
     }
 
-    // Árvores Decorativas do Tiny City
-    for (let arv of arvores) {
+    // Árvores da Fazenda (Cortadas do tileset)
+    for (let arv of arvoresFazenda) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-            ctx.drawImage(tilesetImg, 96, 64, 16, 32, arv.x, arv.y, 32, 56);
+            ctx.drawImage(tilesetImg, 96, 64, 16, 32, arv.x, arv.y, 40, 70);
         } else {
-            ctx.fillStyle = '#2d8a4e';
+            ctx.fillStyle = '#2d6a4f';
             ctx.beginPath();
-            ctx.arc(arv.x + 16, arv.y + 16, 16, 0, Math.PI * 2);
+            ctx.arc(arv.x + 20, arv.y + 20, 20, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    // Mensagem na tela
+    // Barra de Mensagem
     if (jogo.tempoMensagem > 0) {
-        ctx.fillStyle = 'rgba(44, 33, 55, 0.9)';
-        ctx.fillRect(150, 445, 550, 38);
+        ctx.fillStyle = 'rgba(44, 33, 55, 0.92)';
+        ctx.fillRect(180, 485, 600, 42);
         ctx.strokeStyle = '#ffd700';
-        ctx.strokeRect(150, 445, 550, 38);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(180, 485, 600, 42);
         ctx.fillStyle = '#fff6d3';
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(jogo.mensagem, canvas.width / 2, 469);
+        ctx.fillText(jogo.mensagem, canvas.width / 2, 511);
         ctx.textAlign = 'left';
     }
 }
