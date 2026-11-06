@@ -70,31 +70,16 @@
 
     <div id="controles">
         Andar: <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> ou <kbd>Setas</kbd> | 
-        Interagir (Plantar, Colher, Abastecer, Cobrar no Caixa): <kbd>Espaço</kbd> ou <kbd>E</kbd>
+        Interagir (Plantar, Colher, Abastecer, Caixa): <kbd>Espaço</kbd> ou <kbd>E</kbd>
     </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// =========================================================================
-// ÁREA PARA COLOCAR SEUS ASSETS PRONTOS (Quando baixar do Kenney / Itch.io)
-// Basta colocar o caminho da imagem (ex: 'arvore.png') dentro das aspas!
-// =========================================================================
-const CONFIG_IMAGENS = {
-    arvore: '',     // ex: 'assets/arvore.png'
-    jogador: '',    // ex: 'assets/personagem.png'
-    prateleira: ''  // ex: 'assets/gondola.png'
-};
-
-const imagensCarregadas = {};
-for (let chave in CONFIG_IMAGENS) {
-    if (CONFIG_IMAGENS[chave]) {
-        const img = new Image();
-        img.src = CONFIG_IMAGENS[chave];
-        imagensCarregadas[chave] = img;
-    }
-}
+// Carregando a folha de sprites oficial que mandaste do Cloudinary
+const tilesetImg = new Image();
+tilesetImg.src = "https://res.cloudinary.com/oactqmgs/image/upload/v1793927465/tilemap_packed.png";
 
 // --- ESTADO DO JOGO ---
 const jogo = {
@@ -102,7 +87,7 @@ const jogo = {
     sementes: 3,
     morangosMochila: 0,
     estoquePrateleira: 0,
-    mensagem: "Plante nos canteiros e venda no seu Mercado à direita!",
+    mensagem: "Plante nos canteiros e abasteça o seu Mercado à direita!",
     tempoMensagem: 180
 };
 
@@ -112,8 +97,7 @@ const player = {
     y: 250,
     w: 32,
     h: 32,
-    vel: 3.5,
-    cor: '#ff6b6b'
+    vel: 3.5
 };
 
 // --- CENÁRIO: ÁRVORES DECORATIVAS ---
@@ -124,7 +108,6 @@ const arvores = [
 ];
 
 // --- FAZENDA: CANTEIROS DE PLANTAÇÃO ---
-// Estados: 0 = vazio, 1 = plantado, 2 = crescendo, 3 = pronto para colher
 const canteiros = [];
 for (let linha = 0; linha < 3; linha++) {
     for (let col = 0; col < 3; col++) {
@@ -150,15 +133,13 @@ let timerNovoCliente = 100;
 
 function criarCliente() {
     if (clientes.length >= 4) return;
-    const cores = ['#4ecdc4', '#ffe66d', '#a8e6cf', '#ff8b94', '#c7ceea'];
     clientes.push({
         x: 780,
-        y: 480, // Entra pela porta sul do mercado
+        y: 480,
         w: 28,
         h: 28,
         vel: 1.8,
-        cor: cores[Math.floor(Math.random() * cores.length)],
-        estado: 'INDO_PRATELEIRA', // INDO_PRATELEIRA, ESPERANDO_ESTOQUE, INDO_CAIXA, NA_FILA, SAINDO
+        estado: 'INDO_PRATELEIRA',
         temProduto: false
     });
 }
@@ -195,9 +176,7 @@ function distancia(a, b) {
     return Math.hypot(cxA - cxB, cyA - cyB);
 }
 
-// --- AÇÃO DE INTERAGIR (ESPAÇO / E) ---
 function interagir() {
-    // 1. Interagir com Canteiros
     for (let c of canteiros) {
         if (distancia(player, c) < 55) {
             if (c.estado === 0) {
@@ -214,8 +193,8 @@ function interagir() {
             } else if (c.estado === 3) {
                 c.estado = 0;
                 c.progresso = 0;
-                jogo.morangosMochila += 2; // Colhe 2 morangos por pé
-                mostrarAviso("🍓 Você colheu 2 Morangos fresquinhos!");
+                jogo.morangosMochila += 2;
+                mostrarAviso("🍓 Você colheu 2 Morangos!");
                 atualizarHUD();
                 return;
             } else {
@@ -225,12 +204,11 @@ function interagir() {
         }
     }
 
-    // 2. Comprar Sementes
     if (distancia(player, lojaSementes) < 75) {
         if (jogo.ouro >= lojaSementes.preco) {
             jogo.ouro -= lojaSementes.preco;
             jogo.sementes += 3;
-            mostrarAviso("🛍️ Comprou Pacote com 3 Sementes por 10 ouros!");
+            mostrarAviso("🛍️ Comprou 3 Sementes por 10 ouros!");
             atualizarHUD();
         } else {
             mostrarAviso("❌ Ouro insuficiente (Precisa de 10g).");
@@ -238,7 +216,6 @@ function interagir() {
         return;
     }
 
-    // 3. Abastecer Gôndola do Mercado
     if (distancia(player, gondolaMercado) < 85) {
         if (jogo.morangosMochila > 0) {
             jogo.estoquePrateleira += jogo.morangosMochila;
@@ -246,19 +223,17 @@ function interagir() {
             jogo.morangosMochila = 0;
             atualizarHUD();
         } else {
-            mostrarAviso("❌ Você não tem morangos na mochila para expor!");
+            mostrarAviso("❌ Sem morangos na mochila para expor!");
         }
         return;
     }
 
-    // 4. Atender Cliente no Caixa Registrador
     if (distancia(player, caixaRegistradora) < 85) {
         const clienteFila = clientes.find(cli => cli.estado === 'NA_FILA');
         if (clienteFila) {
             clienteFila.estado = 'SAINDO';
-            const valorVenda = 15;
-            jogo.ouro += valorVenda;
-            mostrarAviso(`💰 Venda realizada no Caixa! +${valorVenda} Ouros!`);
+            jogo.ouro += 15;
+            mostrarAviso("💰 Venda realizada no Caixa! +15 Ouros!");
             atualizarHUD();
         } else {
             mostrarAviso("🔔 Nenhum cliente esperando no caixa agora.");
@@ -267,44 +242,38 @@ function interagir() {
     }
 }
 
-// --- LOOP DE ATUALIZAÇÃO ---
 function atualizar() {
-    // Movimento do Jogador
     let dx = 0, dy = 0;
     if (teclas['w'] || teclas['arrowup']) dy = -player.vel;
     if (teclas['s'] || teclas['arrowdown']) dy = player.vel;
     if (teclas['a'] || teclas['arrowleft']) dx = -player.vel;
     if (teclas['d'] || teclas['arrowright']) dx = player.vel;
 
-    // Colisão com a parede divisória do Mercado (x = 450, com porta entre y=210 e y=290)
     let novoX = player.x + dx;
     let novoY = player.y + dy;
 
     const naPorta = (novoY > 205 && novoY + player.h < 295);
     if (!naPorta && novoX + player.w > 445 && novoX < 465) {
-        novoX = player.x; // Bloqueia na parede
+        novoX = player.x;
     }
 
     player.x = Math.max(10, Math.min(canvas.width - player.w - 10, novoX));
     player.y = Math.max(10, Math.min(canvas.height - player.h - 10, novoY));
 
-    // Crescimento das Plantações
     for (let c of canteiros) {
         if (c.estado === 1 || c.estado === 2) {
             c.progresso += 1;
-            if (c.progresso > 180) c.estado = 2; // Broto médio
-            if (c.progresso > 360) c.estado = 3; // Morango maduro!
+            if (c.progresso > 180) c.estado = 2;
+            if (c.progresso > 360) c.estado = 3;
         }
     }
 
-    // Gerador de Clientes
     timerNovoCliente--;
     if (timerNovoCliente <= 0) {
         criarCliente();
         timerNovoCliente = 240;
     }
 
-    // IA dos Clientes
     let indiceFila = 0;
     for (let i = clientes.length - 1; i >= 0; i--) {
         let cli = clientes[i];
@@ -351,18 +320,16 @@ function moverPara(entidade, destX, destY) {
     }
 }
 
-// --- DESENHAR NA TELA ---
 function desenhar() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 1. Chão da Fazenda (Esquerda) e Piso de Madeira do Mercado (Direita)
-    ctx.fillStyle = '#7ec850'; // Grama
+    // Chão da Fazenda e do Mercado
+    ctx.fillStyle = '#7ec850';
     ctx.fillRect(0, 0, 455, canvas.height);
 
-    ctx.fillStyle = '#d9a066'; // Piso do mercado
+    ctx.fillStyle = '#d9a066';
     ctx.fillRect(455, 0, canvas.width - 455, canvas.height);
 
-    // Ladrilhos decorativos no mercado
     ctx.strokeStyle = '#c48c52';
     ctx.lineWidth = 1;
     for (let x = 455; x < canvas.width; x += 40) {
@@ -371,23 +338,20 @@ function desenhar() {
         }
     }
 
-    // Caminho de terra entre fazenda e mercado
     ctx.fillStyle = '#e2b87e';
     ctx.fillRect(320, 220, 160, 60);
 
-    // Parede do Mercado (com abertura para porta)
     ctx.fillStyle = '#6e473b';
     ctx.fillRect(448, 0, 14, 210);
     ctx.fillRect(448, 290, 14, 210);
 
-    // Tapete de entrada dos clientes (Sul Direita)
     ctx.fillStyle = '#c0392b';
     ctx.fillRect(760, 475, 60, 25);
     ctx.fillStyle = '#fff';
     ctx.font = '10px monospace';
     ctx.fillText("ENTRADA", 768, 490);
 
-    // 2. Desenhar Barraca de Sementes
+    // Loja de Sementes
     ctx.fillStyle = '#8f563b';
     ctx.fillRect(lojaSementes.x, lojaSementes.y, lojaSementes.w, lojaSementes.h);
     ctx.fillStyle = '#ff6b6b';
@@ -396,27 +360,27 @@ function desenhar() {
     ctx.font = 'bold 12px monospace';
     ctx.fillText("🌱 SEMENTES (10g)", lojaSementes.x + 2, lojaSementes.y + 26);
 
-    // 3. Desenhar Canteiros de Plantação
+    // Canteiros
     for (let c of canteiros) {
-        ctx.fillStyle = '#6b4423'; // Terra arada
+        ctx.fillStyle = '#6b4423';
         ctx.fillRect(c.x, c.y, c.w, c.h);
         ctx.strokeStyle = '#4e3018';
         ctx.strokeRect(c.x, c.y, c.w, c.h);
 
-        if (c.estado === 1) { // Sementinha
+        if (c.estado === 1) {
             ctx.fillStyle = '#a8e6cf';
             ctx.fillRect(c.x + 20, c.y + 20, 8, 8);
-        } else if (c.estado === 2) { // Broto verde
+        } else if (c.estado === 2) {
             ctx.fillStyle = '#2ecc71';
             ctx.beginPath();
             ctx.arc(c.x + 24, c.y + 24, 10, 0, Math.PI * 2);
             ctx.fill();
-        } else if (c.estado === 3) { // Morango pronto!
+        } else if (c.estado === 3) {
             ctx.fillStyle = '#27ae60';
             ctx.beginPath();
             ctx.arc(c.x + 24, c.y + 20, 13, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#ff2e4c'; // Frutinhas vermelhas
+            ctx.fillStyle = '#ff2e4c';
             ctx.beginPath();
             ctx.arc(c.x + 19, c.y + 26, 6, 0, Math.PI * 2);
             ctx.arc(c.x + 29, c.y + 25, 6, 0, Math.PI * 2);
@@ -424,7 +388,7 @@ function desenhar() {
         }
     }
 
-    // 4. Desenhar Gôndola de Morangos no Mercado
+    // Gôndola do Mercado
     ctx.fillStyle = '#8f563b';
     ctx.fillRect(gondolaMercado.x, gondolaMercado.y, gondolaMercado.w, gondolaMercado.h);
     ctx.fillStyle = '#b87d56';
@@ -433,7 +397,6 @@ function desenhar() {
     ctx.font = 'bold 12px monospace';
     ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 16, gondolaMercado.y - 6);
 
-    // Desenhar morangos em cima da gôndola
     const qtdVisual = Math.min(jogo.estoquePrateleira, 10);
     for (let i = 0; i < qtdVisual; i++) {
         ctx.fillStyle = '#ff2e4c';
@@ -442,25 +405,26 @@ function desenhar() {
         ctx.fill();
     }
 
-    // 5. Desenhar Caixa Registradora
+    // Caixa Registradora
     ctx.fillStyle = '#5c4033';
     ctx.fillRect(caixaRegistradora.x, caixaRegistradora.y, caixaRegistradora.w, caixaRegistradora.h);
-    ctx.fillStyle = '#ffd700'; // Máquina registradora dourada
+    ctx.fillStyle = '#ffd700';
     ctx.fillRect(caixaRegistradora.x + 45, caixaRegistradora.y + 10, 24, 24);
     ctx.fillStyle = '#fff';
     ctx.fillText("CAIXA", caixaRegistradora.x + 20, caixaRegistradora.y - 6);
 
-    // 6. Desenhar Clientes
+    // Clientes (Desenhados usando o sprite do NPC do tileset se carregado, ou boneco colorido)
     for (let cli of clientes) {
-        ctx.fillStyle = cli.cor;
-        ctx.fillRect(cli.x, cli.y, cli.w, cli.h);
-        // Olhinhos
-        ctx.fillStyle = '#222';
-        ctx.fillRect(cli.x + 6, cli.y + 8, 4, 4);
-        ctx.fillRect(cli.x + 18, cli.y + 8, 4, 4);
+        if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
+            // Corta a menininha do tileset (coordenadas aproximadas do sprite de personagem)
+            ctx.drawImage(tilesetImg, 0, 144, 16, 16, cli.x, cli.y, cli.w, cli.h);
+        } else {
+            ctx.fillStyle = '#4ecdc4';
+            ctx.fillRect(cli.x, cli.y, cli.w, cli.h);
+        }
 
-        // Balãozinho de pensamento do cliente
         ctx.font = '14px monospace';
+        ctx.fillStyle = '#fff6d3';
         if (cli.estado === 'ESPERANDO_ESTOQUE') {
             ctx.fillText("💭🍓?", cli.x - 4, cli.y - 6);
         } else if (cli.estado === 'NA_FILA') {
@@ -470,49 +434,29 @@ function desenhar() {
         }
     }
 
-    // 7. Desenhar Jogador
-    if (imagensCarregadas.jogador) {
-        ctx.drawImage(imagensCarregadas.jogador, player.x, player.y, player.w, player.h);
+    // Jogador (Usando o personagem do seu tileset carregado do Cloudinary)
+    if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
+        // Corta o boneco do tileset (ex: o boneco de boné azul na última linha)
+        ctx.drawImage(tilesetImg, 16, 160, 16, 16, player.x, player.y, player.w, player.h);
     } else {
-        // Sombra
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath();
-        ctx.ellipse(player.x + 16, player.y + 30, 12, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Corpo
-        ctx.fillStyle = player.cor;
+        ctx.fillStyle = '#ff6b6b';
         ctx.fillRect(player.x, player.y, player.w, player.h);
-        // Chapéu de fazendeira
-        ctx.fillStyle = '#f4d03f';
-        ctx.fillRect(player.x - 4, player.y - 4, player.w + 8, 8);
-        ctx.fillRect(player.x + 4, player.y - 10, player.w - 8, 6);
-        // Olhos
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(player.x + 6, player.y + 10, 5, 5);
-        ctx.fillRect(player.x + 20, player.y + 10, 5, 5);
     }
 
-    // 8. Desenhar Árvores (Prontas ou Estilizadas)
+    // Árvores Decorativas (Cortadas diretamente da folha do Cloudinary nas coordenadas exatas das árvores)
     for (let arv of arvores) {
-        if (imagensCarregadas.arvore) {
-            ctx.drawImage(imagensCarregadas.arvore, arv.x, arv.y, 56, 64);
+        if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
+            // Coordenadas das árvores no teu tileset_packed.png
+            ctx.drawImage(tilesetImg, 96, 64, 16, 32, arv.x, arv.y, 32, 56);
         } else {
-            // Tronco
-            ctx.fillStyle = '#6e473b';
-            ctx.fillRect(arv.x + 18, arv.y + 32, 14, 20);
-            // Copa arredondada estilo pixel/cartoon
             ctx.fillStyle = '#2d8a4e';
             ctx.beginPath();
-            ctx.arc(arv.x + 25, arv.y + 22, 22, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#3eb467';
-            ctx.beginPath();
-            ctx.arc(arv.x + 21, arv.y + 17, 15, 0, Math.PI * 2);
+            ctx.arc(arv.x + 16, arv.y + 16, 16, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    // 9. Barra de Mensagem Inferior
+    // Barra de Mensagem
     if (jogo.tempoMensagem > 0) {
         ctx.fillStyle = 'rgba(44, 33, 55, 0.9)';
         ctx.fillRect(150, 445, 550, 38);
