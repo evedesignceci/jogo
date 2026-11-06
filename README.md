@@ -1,0 +1,538 @@
+# jogo<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vale do Morango - Fazenda & Mercado</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c2137;
+            color: #fff6d3;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        #hud {
+            background: #5a3b29;
+            border: 4px solid #e0a96d;
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin-bottom: 10px;
+            display: flex;
+            gap: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #3a2316;
+        }
+        .hud-item span { color: #ffd700; }
+        canvas {
+            border: 6px solid #e0a96d;
+            border-radius: 8px;
+            background-color: #7ec850;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            image-rendering: pixelated;
+        }
+        #controles {
+            margin-top: 10px;
+            background: #3d291d;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 2px solid #a67c52;
+            font-size: 14px;
+            color: #ffefc1;
+            text-align: center;
+        }
+        kbd {
+            background: #e0a96d;
+            color: #2c2137;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div class="hud-item">🪙 Ouro: <span id="ui-ouro">50</span>g</div>
+        <div class="hud-item">🌱 Sementes: <span id="ui-sementes">3</span></div>
+        <div class="hud-item">🍓 Na Mochila: <span id="ui-morangos">0</span></div>
+        <div class="hud-item">🛒 Na Prateleira: <span id="ui-estoque">0</span></div>
+    </div>
+
+    <canvas id="gameCanvas" width="850" height="500"></canvas>
+
+    <div id="controles">
+        Andar: <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> ou <kbd>Setas</kbd> | 
+        Interagir (Plantar, Colher, Abastecer, Cobrar no Caixa): <kbd>Espaço</kbd> ou <kbd>E</kbd>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// =========================================================================
+// ÁREA PARA COLOCAR SEUS ASSETS PRONTOS (Quando baixar do Kenney / Itch.io)
+// Basta colocar o caminho da imagem (ex: 'arvore.png') dentro das aspas!
+// =========================================================================
+const CONFIG_IMAGENS = {
+    arvore: '',     // ex: 'assets/arvore.png'
+    jogador: '',    // ex: 'assets/personagem.png'
+    prateleira: ''  // ex: 'assets/gondola.png'
+};
+
+const imagensCarregadas = {};
+for (let chave in CONFIG_IMAGENS) {
+    if (CONFIG_IMAGENS[chave]) {
+        const img = new Image();
+        img.src = CONFIG_IMAGENS[chave];
+        imagensCarregadas[chave] = img;
+    }
+}
+
+// --- ESTADO DO JOGO ---
+const jogo = {
+    ouro: 50,
+    sementes: 3,
+    morangosMochila: 0,
+    estoquePrateleira: 0,
+    mensagem: "Plante nos canteiros e venda no seu Mercado à direita!",
+    tempoMensagem: 180
+};
+
+// --- JOGADOR ---
+const player = {
+    x: 200,
+    y: 250,
+    w: 32,
+    h: 32,
+    vel: 3.5,
+    cor: '#ff6b6b'
+};
+
+// --- CENÁRIO: ÁRVORES DECORATIVAS ---
+const arvores = [
+    { x: 30, y: 30 }, { x: 110, y: 25 }, { x: 30, y: 120 },
+    { x: 30, y: 390 }, { x: 110, y: 410 }, { x: 340, y: 35 },
+    { x: 340, y: 410 }
+];
+
+// --- FAZENDA: CANTEIROS DE PLANTAÇÃO ---
+// Estados: 0 = vazio, 1 = plantado, 2 = crescendo, 3 = pronto para colher
+const canteiros = [];
+for (let linha = 0; linha < 3; linha++) {
+    for (let col = 0; col < 3; col++) {
+        canteiros.push({
+            x: 130 + col * 60,
+            y: 170 + linha * 60,
+            w: 48,
+            h: 48,
+            estado: 0,
+            progresso: 0
+        });
+    }
+}
+
+// --- ESTAÇÕES DE INTERAÇÃO ---
+const lojaSementes = { x: 150, y: 60, w: 110, h: 45, preco: 10 };
+const gondolaMercado = { x: 550, y: 130, w: 120, h: 55 };
+const caixaRegistradora = { x: 520, y: 320, w: 80, h: 50 };
+
+// --- CLIENTES (IA DO MERCADINHO) ---
+const clientes = [];
+let timerNovoCliente = 100;
+
+function criarCliente() {
+    if (clientes.length >= 4) return;
+    const cores = ['#4ecdc4', '#ffe66d', '#a8e6cf', '#ff8b94', '#c7ceea'];
+    clientes.push({
+        x: 780,
+        y: 480, // Entra pela porta sul do mercado
+        w: 28,
+        h: 28,
+        vel: 1.8,
+        cor: cores[Math.floor(Math.random() * cores.length)],
+        estado: 'INDO_PRATELEIRA', // INDO_PRATELEIRA, ESPERANDO_ESTOQUE, INDO_CAIXA, NA_FILA, SAINDO
+        temProduto: false
+    });
+}
+
+// --- CONTROLES ---
+const teclas = {};
+window.addEventListener('keydown', (e) => {
+    teclas[e.key.toLowerCase()] = true;
+    if (e.key === ' ' || e.key.toLowerCase() === 'e') {
+        interagir();
+    }
+});
+window.addEventListener('keyup', (e) => {
+    teclas[e.key.toLowerCase()] = false;
+});
+
+function mostrarAviso(texto) {
+    jogo.mensagem = texto;
+    jogo.tempoMensagem = 150;
+}
+
+function atualizarHUD() {
+    document.getElementById('ui-ouro').innerText = jogo.ouro;
+    document.getElementById('ui-sementes').innerText = jogo.sementes;
+    document.getElementById('ui-morangos').innerText = jogo.morangosMochila;
+    document.getElementById('ui-estoque').innerText = jogo.estoquePrateleira;
+}
+
+function distancia(a, b) {
+    const cxA = a.x + (a.w || 0) / 2;
+    const cyA = a.y + (a.h || 0) / 2;
+    const cxB = b.x + (b.w || 0) / 2;
+    const cyB = b.y + (b.h || 0) / 2;
+    return Math.hypot(cxA - cxB, cyA - cyB);
+}
+
+// --- AÇÃO DE INTERAGIR (ESPAÇO / E) ---
+function interagir() {
+    // 1. Interagir com Canteiros
+    for (let c of canteiros) {
+        if (distancia(player, c) < 55) {
+            if (c.estado === 0) {
+                if (jogo.sementes > 0) {
+                    jogo.sementes--;
+                    c.estado = 1;
+                    c.progresso = 0;
+                    mostrarAviso("🌱 Semente de morango plantada!");
+                    atualizarHUD();
+                } else {
+                    mostrarAviso("❌ Sem sementes! Compre na placa lá em cima (10g).");
+                }
+                return;
+            } else if (c.estado === 3) {
+                c.estado = 0;
+                c.progresso = 0;
+                jogo.morangosMochila += 2; // Colhe 2 morangos por pé
+                mostrarAviso("🍓 Você colheu 2 Morangos fresquinhos!");
+                atualizarHUD();
+                return;
+            } else {
+                mostrarAviso("⏳ A plantinha ainda está crescendo...");
+                return;
+            }
+        }
+    }
+
+    // 2. Comprar Sementes
+    if (distancia(player, lojaSementes) < 75) {
+        if (jogo.ouro >= lojaSementes.preco) {
+            jogo.ouro -= lojaSementes.preco;
+            jogo.sementes += 3;
+            mostrarAviso("🛍️ Comprou Pacote com 3 Sementes por 10 ouros!");
+            atualizarHUD();
+        } else {
+            mostrarAviso("❌ Ouro insuficiente (Precisa de 10g).");
+        }
+        return;
+    }
+
+    // 3. Abastecer Gôndola do Mercado
+    if (distancia(player, gondolaMercado) < 85) {
+        if (jogo.morangosMochila > 0) {
+            jogo.estoquePrateleira += jogo.morangosMochila;
+            mostrarAviso(`🛒 Abasteceu a prateleira com ${jogo.morangosMochila} morangos!`);
+            jogo.morangosMochila = 0;
+            atualizarHUD();
+        } else {
+            mostrarAviso("❌ Você não tem morangos na mochila para expor!");
+        }
+        return;
+    }
+
+    // 4. Atender Cliente no Caixa Registrador
+    if (distancia(player, caixaRegistradora) < 85) {
+        const clienteFila = clientes.find(cli => cli.estado === 'NA_FILA');
+        if (clienteFila) {
+            clienteFila.estado = 'SAINDO';
+            const valorVenda = 15;
+            jogo.ouro += valorVenda;
+            mostrarAviso(`💰 Venda realizada no Caixa! +${valorVenda} Ouros!`);
+            atualizarHUD();
+        } else {
+            mostrarAviso("🔔 Nenhum cliente esperando no caixa agora.");
+        }
+        return;
+    }
+}
+
+// --- LOOP DE ATUALIZAÇÃO ---
+function atualizar() {
+    // Movimento do Jogador
+    let dx = 0, dy = 0;
+    if (teclas['w'] || teclas['arrowup']) dy = -player.vel;
+    if (teclas['s'] || teclas['arrowdown']) dy = player.vel;
+    if (teclas['a'] || teclas['arrowleft']) dx = -player.vel;
+    if (teclas['d'] || teclas['arrowright']) dx = player.vel;
+
+    // Colisão com a parede divisória do Mercado (x = 450, com porta entre y=210 e y=290)
+    let novoX = player.x + dx;
+    let novoY = player.y + dy;
+
+    const naPorta = (novoY > 205 && novoY + player.h < 295);
+    if (!naPorta && novoX + player.w > 445 && novoX < 465) {
+        novoX = player.x; // Bloqueia na parede
+    }
+
+    player.x = Math.max(10, Math.min(canvas.width - player.w - 10, novoX));
+    player.y = Math.max(10, Math.min(canvas.height - player.h - 10, novoY));
+
+    // Crescimento das Plantações
+    for (let c of canteiros) {
+        if (c.estado === 1 || c.estado === 2) {
+            c.progresso += 1;
+            if (c.progresso > 180) c.estado = 2; // Broto médio
+            if (c.progresso > 360) c.estado = 3; // Morango maduro!
+        }
+    }
+
+    // Gerador de Clientes
+    timerNovoCliente--;
+    if (timerNovoCliente <= 0) {
+        criarCliente();
+        timerNovoCliente = 240;
+    }
+
+    // IA dos Clientes
+    let indiceFila = 0;
+    for (let i = clientes.length - 1; i >= 0; i--) {
+        let cli = clientes[i];
+
+        if (cli.estado === 'INDO_PRATELEIRA') {
+            moverPara(cli, gondolaMercado.x + 40, gondolaMercado.y + 70);
+            if (Math.hypot(cli.x - (gondolaMercado.x + 40), cli.y - (gondolaMercado.y + 70)) < 10) {
+                cli.estado = 'ESPERANDO_ESTOQUE';
+            }
+        } 
+        else if (cli.estado === 'ESPERANDO_ESTOQUE') {
+            if (jogo.estoquePrateleira > 0) {
+                jogo.estoquePrateleira--;
+                cli.temProduto = true;
+                cli.estado = 'INDO_CAIXA';
+                atualizarHUD();
+            }
+        } 
+        else if (cli.estado === 'INDO_CAIXA' || cli.estado === 'NA_FILA') {
+            const posFilaX = caixaRegistradora.x + 95 + (indiceFila * 36);
+            const posFilaY = caixaRegistradora.y + 10;
+            indiceFila++;
+            moverPara(cli, posFilaX, posFilaY);
+            if (Math.hypot(cli.x - posFilaX, cli.y - posFilaY) < 8) {
+                cli.estado = 'NA_FILA';
+            }
+        } 
+        else if (cli.estado === 'SAINDO') {
+            moverPara(cli, 780, 510);
+            if (cli.y > 495) {
+                clientes.splice(i, 1);
+            }
+        }
+    }
+
+    if (jogo.tempoMensagem > 0) jogo.tempoMensagem--;
+}
+
+function moverPara(entidade, destX, destY) {
+    const angulo = Math.atan2(destY - entidade.y, destX - entidade.x);
+    if (Math.hypot(destX - entidade.x, destY - entidade.y) > entidade.vel) {
+        entidade.x += Math.cos(angulo) * entidade.vel;
+        entidade.y += Math.sin(angulo) * entidade.vel;
+    }
+}
+
+// --- DESENHAR NA TELA ---
+function desenhar() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Chão da Fazenda (Esquerda) e Piso de Madeira do Mercado (Direita)
+    ctx.fillStyle = '#7ec850'; // Grama
+    ctx.fillRect(0, 0, 455, canvas.height);
+
+    ctx.fillStyle = '#d9a066'; // Piso do mercado
+    ctx.fillRect(455, 0, canvas.width - 455, canvas.height);
+
+    // Ladrilhos decorativos no mercado
+    ctx.strokeStyle = '#c48c52';
+    ctx.lineWidth = 1;
+    for (let x = 455; x < canvas.width; x += 40) {
+        for (let y = 0; y < canvas.height; y += 40) {
+            ctx.strokeRect(x, y, 40, 40);
+        }
+    }
+
+    // Caminho de terra entre fazenda e mercado
+    ctx.fillStyle = '#e2b87e';
+    ctx.fillRect(320, 220, 160, 60);
+
+    // Parede do Mercado (com abertura para porta)
+    ctx.fillStyle = '#6e473b';
+    ctx.fillRect(448, 0, 14, 210);
+    ctx.fillRect(448, 290, 14, 210);
+
+    // Tapete de entrada dos clientes (Sul Direita)
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(760, 475, 60, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px monospace';
+    ctx.fillText("ENTRADA", 768, 490);
+
+    // 2. Desenhar Barraca de Sementes
+    ctx.fillStyle = '#8f563b';
+    ctx.fillRect(lojaSementes.x, lojaSementes.y, lojaSementes.w, lojaSementes.h);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(lojaSementes.x - 5, lojaSementes.y - 12, lojaSementes.w + 10, 14);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText("🌱 SEMENTES (10g)", lojaSementes.x + 2, lojaSementes.y + 26);
+
+    // 3. Desenhar Canteiros de Plantação
+    for (let c of canteiros) {
+        ctx.fillStyle = '#6b4423'; // Terra arada
+        ctx.fillRect(c.x, c.y, c.w, c.h);
+        ctx.strokeStyle = '#4e3018';
+        ctx.strokeRect(c.x, c.y, c.w, c.h);
+
+        if (c.estado === 1) { // Sementinha
+            ctx.fillStyle = '#a8e6cf';
+            ctx.fillRect(c.x + 20, c.y + 20, 8, 8);
+        } else if (c.estado === 2) { // Broto verde
+            ctx.fillStyle = '#2ecc71';
+            ctx.beginPath();
+            ctx.arc(c.x + 24, c.y + 24, 10, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (c.estado === 3) { // Morango pronto!
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.arc(c.x + 24, c.y + 20, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ff2e4c'; // Frutinhas vermelhas
+            ctx.beginPath();
+            ctx.arc(c.x + 19, c.y + 26, 6, 0, Math.PI * 2);
+            ctx.arc(c.x + 29, c.y + 25, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // 4. Desenhar Gôndola de Morangos no Mercado
+    ctx.fillStyle = '#8f563b';
+    ctx.fillRect(gondolaMercado.x, gondolaMercado.y, gondolaMercado.w, gondolaMercado.h);
+    ctx.fillStyle = '#b87d56';
+    ctx.fillRect(gondolaMercado.x + 6, gondolaMercado.y + 6, gondolaMercado.w - 12, gondolaMercado.h - 12);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 16, gondolaMercado.y - 6);
+
+    // Desenhar morangos em cima da gôndola
+    const qtdVisual = Math.min(jogo.estoquePrateleira, 10);
+    for (let i = 0; i < qtdVisual; i++) {
+        ctx.fillStyle = '#ff2e4c';
+        ctx.beginPath();
+        ctx.arc(gondolaMercado.x + 18 + (i % 5) * 20, gondolaMercado.y + 20 + Math.floor(i / 5) * 18, 6, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // 5. Desenhar Caixa Registradora
+    ctx.fillStyle = '#5c4033';
+    ctx.fillRect(caixaRegistradora.x, caixaRegistradora.y, caixaRegistradora.w, caixaRegistradora.h);
+    ctx.fillStyle = '#ffd700'; // Máquina registradora dourada
+    ctx.fillRect(caixaRegistradora.x + 45, caixaRegistradora.y + 10, 24, 24);
+    ctx.fillStyle = '#fff';
+    ctx.fillText("CAIXA", caixaRegistradora.x + 20, caixaRegistradora.y - 6);
+
+    // 6. Desenhar Clientes
+    for (let cli of clientes) {
+        ctx.fillStyle = cli.cor;
+        ctx.fillRect(cli.x, cli.y, cli.w, cli.h);
+        // Olhinhos
+        ctx.fillStyle = '#222';
+        ctx.fillRect(cli.x + 6, cli.y + 8, 4, 4);
+        ctx.fillRect(cli.x + 18, cli.y + 8, 4, 4);
+
+        // Balãozinho de pensamento do cliente
+        ctx.font = '14px monospace';
+        if (cli.estado === 'ESPERANDO_ESTOQUE') {
+            ctx.fillText("💭🍓?", cli.x - 4, cli.y - 6);
+        } else if (cli.estado === 'NA_FILA') {
+            ctx.fillText("🪙Pagar!", cli.x - 10, cli.y - 6);
+        } else if (cli.estado === 'SAINDO') {
+            ctx.fillText("❤️", cli.x + 6, cli.y - 6);
+        }
+    }
+
+    // 7. Desenhar Jogador
+    if (imagensCarregadas.jogador) {
+        ctx.drawImage(imagensCarregadas.jogador, player.x, player.y, player.w, player.h);
+    } else {
+        // Sombra
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(player.x + 16, player.y + 30, 12, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Corpo
+        ctx.fillStyle = player.cor;
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+        // Chapéu de fazendeira
+        ctx.fillStyle = '#f4d03f';
+        ctx.fillRect(player.x - 4, player.y - 4, player.w + 8, 8);
+        ctx.fillRect(player.x + 4, player.y - 10, player.w - 8, 6);
+        // Olhos
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(player.x + 6, player.y + 10, 5, 5);
+        ctx.fillRect(player.x + 20, player.y + 10, 5, 5);
+    }
+
+    // 8. Desenhar Árvores (Prontas ou Estilizadas)
+    for (let arv of arvores) {
+        if (imagensCarregadas.arvore) {
+            ctx.drawImage(imagensCarregadas.arvore, arv.x, arv.y, 56, 64);
+        } else {
+            // Tronco
+            ctx.fillStyle = '#6e473b';
+            ctx.fillRect(arv.x + 18, arv.y + 32, 14, 20);
+            // Copa arredondada estilo pixel/cartoon
+            ctx.fillStyle = '#2d8a4e';
+            ctx.beginPath();
+            ctx.arc(arv.x + 25, arv.y + 22, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#3eb467';
+            ctx.beginPath();
+            ctx.arc(arv.x + 21, arv.y + 17, 15, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // 9. Barra de Mensagem Inferior
+    if (jogo.tempoMensagem > 0) {
+        ctx.fillStyle = 'rgba(44, 33, 55, 0.9)';
+        ctx.fillRect(150, 445, 550, 38);
+        ctx.strokeStyle = '#ffd700';
+        ctx.strokeRect(150, 445, 550, 38);
+        ctx.fillStyle = '#fff6d3';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(jogo.mensagem, canvas.width / 2, 469);
+        ctx.textAlign = 'left';
+    }
+}
+
+function loop() {
+    atualizar();
+    desenhar();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
