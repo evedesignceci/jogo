@@ -78,7 +78,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Carregando apenas a tua imagem exata do tileset do Cloudinary
+// Carregando o tileset limpo
 const tilesetImg = new Image();
 tilesetImg.src = "https://res.cloudinary.com/oactqmgs/image/upload/v1793927465/tilemap.png";
 
@@ -96,14 +96,14 @@ const jogo = {
 const player = {
     x: 180,
     y: 240,
-    w: 36,
-    h: 36,
+    w: 32,
+    h: 32,
     vel: 3.5
 };
 
-// --- ÁRVORES DO CENÁRIO (Coordenadas limpas do teu tileset) ---
+// --- ÁRVORES DECORATIVAS (Posicionadas de forma charmosa) ---
 const arvores = [
-    { x: 30, y: 25 }, { x: 90, y: 25 }, { x: 30, y: 390 }, { x: 370, y: 25 }
+    { x: 30, y: 30 }, { x: 90, y: 30 }, { x: 30, y: 400 }, { x: 370, y: 30 }
 ];
 
 // --- FAZENDA: CANTEIROS ---
@@ -128,16 +128,16 @@ const caixaRegistradora = { x: 590, y: 330, w: 85, h: 50 };
 
 // --- CLIENTES DO MERCADO ---
 const clientes = [];
-let timerNovoCliente = 120;
+let timerNovoCliente = 140;
 
 function criarCliente() {
-    if (clientes.length >= 4) return;
+    if (clientes.length >= 3) return; // Limite máximo de clientes para não acumular
     clientes.push({
         x: 830,
         y: 420,
-        w: 32,
-        h: 32,
-        vel: 1.8,
+        w: 28,
+        h: 28,
+        vel: 1.5,
         estado: 'INDO_PRATELEIRA'
     });
 }
@@ -250,7 +250,6 @@ function atualizar() {
     let novoX = player.x + dx;
     let novoY = player.y + dy;
 
-    // Porta entre a fazenda e o mercado
     const naPorta = (novoY > 190 && novoY + player.h < 290);
     if (!naPorta && novoX + player.w > 430 && novoX < 450) {
         novoX = player.x;
@@ -270,7 +269,7 @@ function atualizar() {
     timerNovoCliente--;
     if (timerNovoCliente <= 0) {
         criarCliente();
-        timerNovoCliente = 240;
+        timerNovoCliente = 280;
     }
 
     let indiceFila = 0;
@@ -291,7 +290,7 @@ function atualizar() {
             }
         } 
         else if (cli.estado === 'INDO_CAIXA' || cli.estado === 'NA_FILA') {
-            const posFilaX = caixaRegistradora.x + 80 + (indiceFila * 36);
+            const posFilaX = caixaRegistradora.x - 40 - (indiceFila * 35);
             const posFilaY = caixaRegistradora.y + 10;
             indiceFila++;
             moverPara(cli, posFilaX, posFilaY);
@@ -321,11 +320,11 @@ function moverPara(entidade, destX, destY) {
 function desenhar() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // --- LADO ESQUERDO: FAZENDA (Fundo verde limpo) ---
+    // --- LADO ESQUERDO: FAZENDA ---
     ctx.fillStyle = '#6ab04c';
     ctx.fillRect(0, 0, 440, canvas.height);
 
-    // --- LADO DIREITO: MERCADO (Piso interno elegante) ---
+    // --- LADO DIREITO: MERCADO ---
     ctx.fillStyle = '#d2a679';
     ctx.fillRect(440, 0, canvas.width - 440, canvas.height);
 
@@ -400,17 +399,17 @@ function desenhar() {
     ctx.font = 'bold 12px monospace';
     ctx.fillText("CAIXA", caixaRegistradora.x + 22, caixaRegistradora.y - 6);
 
-    // Clientes (Recortados certinhos da tua imagem tilemap.png)
+    // Clientes
     for (let cli of clientes) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-            // Recorte limpo da menininha no tilemap (últimas linhas)
+            // Coordenada exata da personagem feminina no teu tilemap.png (última linha à esquerda)
             ctx.drawImage(tilesetImg, 0, 144, 16, 16, cli.x, cli.y, cli.w, cli.h);
         } else {
             ctx.fillStyle = '#4ea8de';
             ctx.fillRect(cli.x, cli.y, cli.w, cli.h);
         }
 
-        ctx.font = '13px monospace';
+        ctx.font = '12px monospace';
         ctx.fillStyle = '#fff6d3';
         if (cli.estado === 'ESPERANDO_ESTOQUE') {
             ctx.fillText("💭🍓?", cli.x - 4, cli.y - 6);
@@ -421,20 +420,18 @@ function desenhar() {
         }
     }
 
-    // Jogador (Recortado certinho da tua imagem tilemap.png)
+    // Jogador (Personagem masculino/trabalhador no tilemap)
     if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-        // Recorte limpo do personagem no tilemap
         ctx.drawImage(tilesetImg, 16, 160, 16, 16, player.x, player.y, player.w, player.h);
     } else {
         ctx.fillStyle = '#f72585';
         ctx.fillRect(player.x, player.y, player.w, player.h);
     }
 
-    // Árvores da Fazenda (Recortadas da tua imagem tilemap.png)
+    // Árvores da Fazenda (Coordenadas exatas das árvores no teu tilemap.png)
     for (let arv of arvores) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-            // Recorte limpo da árvore verde no tilemap
-            ctx.drawImage(tilesetImg, 96, 64, 16, 32, arv.x, arv.y, 42, 76);
+            ctx.drawImage(tilesetImg, 192, 64, 32, 48, arv.x, arv.y, 48, 64);
         } else {
             ctx.fillStyle = '#2d6a4f';
             ctx.beginPath();
