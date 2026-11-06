@@ -77,7 +77,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Carregando a folha de sprites oficial que mandaste do Cloudinary
+// Carregando o tileset completo do Cloudinary
 const tilesetImg = new Image();
 tilesetImg.src = "https://res.cloudinary.com/oactqmgs/image/upload/v1793927465/tilemap_packed.png";
 
@@ -87,7 +87,7 @@ const jogo = {
     sementes: 3,
     morangosMochila: 0,
     estoquePrateleira: 0,
-    mensagem: "Plante nos canteiros e abasteça o seu Mercado à direita!",
+    mensagem: "Colha os morangos na fazenda e leve para vender no seu Mercadinho!",
     tempoMensagem: 180
 };
 
@@ -100,14 +100,13 @@ const player = {
     vel: 3.5
 };
 
-// --- CENÁRIO: ÁRVORES DECORATIVAS ---
+// --- ÁRVORES DO CENÁRIO (Coordenadas extraídas do Tiny City) ---
 const arvores = [
-    { x: 30, y: 30 }, { x: 110, y: 25 }, { x: 30, y: 120 },
-    { x: 30, y: 390 }, { x: 110, y: 410 }, { x: 340, y: 35 },
-    { x: 340, y: 410 }
+    { x: 20, y: 20 }, { x: 90, y: 15 }, { x: 20, y: 420 },
+    { x: 380, y: 20 }, { x: 380, y: 430 }
 ];
 
-// --- FAZENDA: CANTEIROS DE PLANTAÇÃO ---
+// --- FAZENDA: CANTEIROS ---
 const canteiros = [];
 for (let linha = 0; linha < 3; linha++) {
     for (let col = 0; col < 3; col++) {
@@ -124,8 +123,8 @@ for (let linha = 0; linha < 3; linha++) {
 
 // --- ESTAÇÕES DE INTERAÇÃO ---
 const lojaSementes = { x: 150, y: 60, w: 110, h: 45, preco: 10 };
-const gondolaMercado = { x: 550, y: 130, w: 120, h: 55 };
-const caixaRegistradora = { x: 520, y: 320, w: 80, h: 50 };
+const gondolaMercado = { x: 580, y: 140, w: 120, h: 55 };
+const caixaRegistradora = { x: 550, y: 340, w: 80, h: 50 };
 
 // --- CLIENTES (IA DO MERCADINHO) ---
 const clientes = [];
@@ -134,8 +133,8 @@ let timerNovoCliente = 100;
 function criarCliente() {
     if (clientes.length >= 4) return;
     clientes.push({
-        x: 780,
-        y: 480,
+        x: 800,
+        y: 450,
         w: 28,
         h: 28,
         vel: 1.8,
@@ -187,7 +186,7 @@ function interagir() {
                     mostrarAviso("🌱 Semente de morango plantada!");
                     atualizarHUD();
                 } else {
-                    mostrarAviso("❌ Sem sementes! Compre na placa lá em cima (10g).");
+                    mostrarAviso("❌ Sem sementes! Compre na lojinha (10g).");
                 }
                 return;
             } else if (c.estado === 3) {
@@ -252,8 +251,9 @@ function atualizar() {
     let novoX = player.x + dx;
     let novoY = player.y + dy;
 
-    const naPorta = (novoY > 205 && novoY + player.h < 295);
-    if (!naPorta && novoX + player.w > 445 && novoX < 465) {
+    // Porta de entrada entre a fazenda e a cidade
+    const naPorta = (novoY > 200 && novoY + player.h < 300);
+    if (!naPorta && novoX + player.w > 435 && novoX < 455) {
         novoX = player.x;
     }
 
@@ -293,7 +293,7 @@ function atualizar() {
             }
         } 
         else if (cli.estado === 'INDO_CAIXA' || cli.estado === 'NA_FILA') {
-            const posFilaX = caixaRegistradora.x + 95 + (indiceFila * 36);
+            const posFilaX = caixaRegistradora.x + 85 + (indiceFila * 32);
             const posFilaY = caixaRegistradora.y + 10;
             indiceFila++;
             moverPara(cli, posFilaX, posFilaY);
@@ -302,8 +302,8 @@ function atualizar() {
             }
         } 
         else if (cli.estado === 'SAINDO') {
-            moverPara(cli, 780, 510);
-            if (cli.y > 495) {
+            moverPara(cli, 820, 450);
+            if (cli.x > 810) {
                 clientes.splice(i, 1);
             }
         }
@@ -323,35 +323,29 @@ function moverPara(entidade, destX, destY) {
 function desenhar() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Chão da Fazenda e do Mercado
-    ctx.fillStyle = '#7ec850';
-    ctx.fillRect(0, 0, 455, canvas.height);
+    if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
+        // --- LADO ESQUERDO: FAZENDA ---
+        ctx.fillStyle = '#7ec850';
+        ctx.fillRect(0, 0, 445, canvas.height);
 
-    ctx.fillStyle = '#d9a066';
-    ctx.fillRect(455, 0, canvas.width - 455, canvas.height);
-
-    ctx.strokeStyle = '#c48c52';
-    ctx.lineWidth = 1;
-    for (let x = 455; x < canvas.width; x += 40) {
-        for (let y = 0; y < canvas.height; y += 40) {
-            ctx.strokeRect(x, y, 40, 40);
-        }
+        // --- LADO DIREITO: CIDADE / MERCADO (Desenhando o asfalto e calçadas do Tiny City) ---
+        // Asfalto da rua principal da cidade
+        ctx.drawImage(tilesetImg, 64, 64, 48, 48, 445, 200, 405, 100);
+        // Calçadas da cidade
+        ctx.drawImage(tilesetImg, 0, 0, 48, 48, 445, 0, 405, 200);
+        ctx.drawImage(tilesetImg, 0, 0, 48, 48, 445, 300, 405, 200);
+    } else {
+        ctx.fillStyle = '#7ec850';
+        ctx.fillRect(0, 0, 445, canvas.height);
+        ctx.fillStyle = '#d9a066';
+        ctx.fillRect(445, 0, canvas.width - 445, canvas.height);
     }
 
+    // Caminho de terra entre a fazenda e a cidade
     ctx.fillStyle = '#e2b87e';
-    ctx.fillRect(320, 220, 160, 60);
+    ctx.fillRect(380, 215, 100, 70);
 
-    ctx.fillStyle = '#6e473b';
-    ctx.fillRect(448, 0, 14, 210);
-    ctx.fillRect(448, 290, 14, 210);
-
-    ctx.fillStyle = '#c0392b';
-    ctx.fillRect(760, 475, 60, 25);
-    ctx.fillStyle = '#fff';
-    ctx.font = '10px monospace';
-    ctx.fillText("ENTRADA", 768, 490);
-
-    // Loja de Sementes
+    // Loja de Sementes na Fazenda
     ctx.fillStyle = '#8f563b';
     ctx.fillRect(lojaSementes.x, lojaSementes.y, lojaSementes.w, lojaSementes.h);
     ctx.fillStyle = '#ff6b6b';
@@ -360,7 +354,7 @@ function desenhar() {
     ctx.font = 'bold 12px monospace';
     ctx.fillText("🌱 SEMENTES (10g)", lojaSementes.x + 2, lojaSementes.y + 26);
 
-    // Canteiros
+    // Canteiros de Plantação
     for (let c of canteiros) {
         ctx.fillStyle = '#6b4423';
         ctx.fillRect(c.x, c.y, c.w, c.h);
@@ -388,20 +382,20 @@ function desenhar() {
         }
     }
 
-    // Gôndola do Mercado
+    // Prateleira/Gôndola do Mercado
     ctx.fillStyle = '#8f563b';
     ctx.fillRect(gondolaMercado.x, gondolaMercado.y, gondolaMercado.w, gondolaMercado.h);
     ctx.fillStyle = '#b87d56';
     ctx.fillRect(gondolaMercado.x + 6, gondolaMercado.y + 6, gondolaMercado.w - 12, gondolaMercado.h - 12);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 12px monospace';
-    ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 16, gondolaMercado.y - 6);
+    ctx.fillText(`GÔNDOLA (${jogo.estoquePrateleira})`, gondolaMercado.x + 12, gondolaMercado.y - 6);
 
     const qtdVisual = Math.min(jogo.estoquePrateleira, 10);
     for (let i = 0; i < qtdVisual; i++) {
         ctx.fillStyle = '#ff2e4c';
         ctx.beginPath();
-        ctx.arc(gondolaMercado.x + 18 + (i % 5) * 20, gondolaMercado.y + 20 + Math.floor(i / 5) * 18, 6, 0, Math.PI * 2);
+        ctx.arc(gondolaMercado.x + 16 + (i % 5) * 20, gondolaMercado.y + 20 + Math.floor(i / 5) * 18, 6, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -409,14 +403,13 @@ function desenhar() {
     ctx.fillStyle = '#5c4033';
     ctx.fillRect(caixaRegistradora.x, caixaRegistradora.y, caixaRegistradora.w, caixaRegistradora.h);
     ctx.fillStyle = '#ffd700';
-    ctx.fillRect(caixaRegistradora.x + 45, caixaRegistradora.y + 10, 24, 24);
+    ctx.fillRect(caixaRegistradora.x + 35, caixaRegistradora.y + 10, 24, 24);
     ctx.fillStyle = '#fff';
-    ctx.fillText("CAIXA", caixaRegistradora.x + 20, caixaRegistradora.y - 6);
+    ctx.fillText("CAIXA", caixaRegistradora.x + 16, caixaRegistradora.y - 6);
 
-    // Clientes (Desenhados usando o sprite do NPC do tileset se carregado, ou boneco colorido)
+    // Clientes da Cidade
     for (let cli of clientes) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-            // Corta a menininha do tileset (coordenadas aproximadas do sprite de personagem)
             ctx.drawImage(tilesetImg, 0, 144, 16, 16, cli.x, cli.y, cli.w, cli.h);
         } else {
             ctx.fillStyle = '#4ecdc4';
@@ -434,19 +427,17 @@ function desenhar() {
         }
     }
 
-    // Jogador (Usando o personagem do seu tileset carregado do Cloudinary)
+    // Jogador
     if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-        // Corta o boneco do tileset (ex: o boneco de boné azul na última linha)
         ctx.drawImage(tilesetImg, 16, 160, 16, 16, player.x, player.y, player.w, player.h);
     } else {
         ctx.fillStyle = '#ff6b6b';
         ctx.fillRect(player.x, player.y, player.w, player.h);
     }
 
-    // Árvores Decorativas (Cortadas diretamente da folha do Cloudinary nas coordenadas exatas das árvores)
+    // Árvores Decorativas do Tiny City
     for (let arv of arvores) {
         if (tilesetImg.complete && tilesetImg.naturalWidth !== 0) {
-            // Coordenadas das árvores no teu tileset_packed.png
             ctx.drawImage(tilesetImg, 96, 64, 16, 32, arv.x, arv.y, 32, 56);
         } else {
             ctx.fillStyle = '#2d8a4e';
@@ -456,7 +447,7 @@ function desenhar() {
         }
     }
 
-    // Barra de Mensagem
+    // Mensagem na tela
     if (jogo.tempoMensagem > 0) {
         ctx.fillStyle = 'rgba(44, 33, 55, 0.9)';
         ctx.fillRect(150, 445, 550, 38);
